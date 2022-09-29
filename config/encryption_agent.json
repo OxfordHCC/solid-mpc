@@ -1,0 +1,10 @@
+{
+  "credential": {
+    "idp" : "https://solidcommunity.net",
+    "username" : "AGENT-USERNAME",
+    "password" : "AGENT-PASSWORD"
+  },
+  "base_dir": "/PATH/TO/MP-SPDZ",
+  "allowed_origins": [ "*" ]
+}
+

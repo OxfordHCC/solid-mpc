@@ -1,0 +1,7 @@
+__pycache__
+node_modules
+
+*.bak
+*~
+
+encryption_agent_credential.js

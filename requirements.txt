@@ -1,0 +1,5 @@
+ipdb
+ipython
+gmpy2
+fastapi
+uvicorn

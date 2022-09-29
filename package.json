@@ -1,0 +1,16 @@
+{
+  "name": "solid-mpc",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "data_fetcher.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "config": "^3.3.8",
+    "solid-node-client": "^2.1.10"
+  }
+}

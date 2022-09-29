@@ -1,0 +1,4 @@
+{
+  "base_dir": "/PATH/TO/MP-SPDZ",
+  "allowed_origins": [ "*" ]
+}

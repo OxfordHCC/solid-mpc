@@ -10,6 +10,22 @@ Refer to [`mpc-app`](./mpc-app) for the companion Solid App for the end users (w
 
 ## How to run
 
+### Preparation
+
+You should correctly set up the MP-SPDZ environment beforehand (not documented here, see MP-SPDZ's doc). Then, you should install the relevant dependencies, as stated in this section, before running the agent services.
+
+For both type of agents, you need to install Python dependencies to run the API endpoint (service):
+
+```
+pip install -r requirements.txt
+```
+
+For Encryption Agent, you also need to install nodejs dependencies to use data fetcher:
+
+```
+npm install
+```
+
 ### Automated
 
 Use [tmuxp](https://github.com/tmux-python/tmuxp):
@@ -34,8 +50,6 @@ uvicorn encryption_server:app --port 8000 --reload
 
 Run separate servers by changing the port number.
 
-
-
 Remember to configure the authentication credentials as stated later.
 
 #### Run computation server(s)
@@ -48,13 +62,9 @@ Run separate servers by changing the port number.
 
 You will also want to change `PORT_BASE` if you are testing locally, otherwise there will be port conflicts (of the running MPC circuit) between server instances. The example uses 5000, 5010 and 5020 as the port bases, which allows each agent to run 10 MPC tasks simultaneously.
 
-
-
 ## Server configuration
 
 Both the encryption agent and computation agent needs to have a meaningful configuration file. In particular, the `base_dir` needs to be the base directory of the local MP-SPDZ installation.
-
-
 
 ### Encryption agent
 
@@ -66,7 +76,13 @@ The encryption agent will use an authenticated fetch to retrieve data from user 
 
 Our implementaion uses [solid-node-client](https://github.com/solid-contrib/solid-node-client) to authenticate the agent as a WebID. Therefore, you need to create a WebID for your encryption agent (or multiple of them) by registering a pod for it.
 
-Then, change the content of `config/encryption_agent.json` to match your agent user.
+Then, add `https://solid-node-client` to the list of trusted apps for the agent user.
+
+Finally, change the content of `config/encryption_agent.json` to match your agent user: IDP (usually the server address where the agent user is registered), username, and password.
+
+#### Other
+
+You need to manually create the directory: `MP-SPDZ/ExternalIO/DownloadData`, where the downloaded data are stored.
 
 ### Computaion agent
 
@@ -74,4 +90,4 @@ Configuration file locate at `config/computation_agent.json`. Open and modify it
 
 ## User/Pod configuration
 
-The encryption agent(s) will need to fetch data from the user, and then securely send shares of the data to the computation agents. Therefore, the user will need to ensure appropriate permission is set to allow the encryption agent to access the data.
+The encryption agent(s) will need to fetch data from the data providers, and then securely send shares of the data to the computation agents. Therefore, the user will need to ensure appropriate permission is set to allow the encryption agent to access the data. Refer to the [README](mpc-app/README.md) of [mpc-app](mpc-app) for details.

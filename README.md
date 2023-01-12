@@ -6,7 +6,7 @@ MPC on Solid (or Solid-like decentralized settings).
 
 This directory contains the server code, i.e. the code for the encryption agent and the computation agent.
 
-Refer to [`mpc-app`](./mpc-app) for the companion Solid App for the end users (who want to initialize MPC).
+Refer to [`mpc-app`](https://github.com/OxfordHCC/solid-mpc-app) for the companion Solid App for the end users (who want to initiate MPC).
 
 ## How to run
 
@@ -90,4 +90,4 @@ Configuration file locate at `config/computation_agent.json`. Open and modify it
 
 ## User/Pod configuration
 
-The encryption agent(s) will need to fetch data from the data providers, and then securely send shares of the data to the computation agents. Therefore, the user will need to ensure appropriate permission is set to allow the encryption agent to access the data. Refer to the [README](mpc-app/README.md) of [mpc-app](mpc-app) for details.
+The encryption agent(s) will need to fetch data from the data providers, and then securely send shares of the data to the computation agents. Therefore, the user will need to ensure appropriate permission is set to allow the encryption agent to access the data. Refer to the [README of mpc-app](https://github.com/OxfordHCC/solid-mpc-app/blob/master/README.md) for details.

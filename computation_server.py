@@ -19,9 +19,11 @@ from pathlib import Path
 import tempfile
 import asyncio
 import os
+import sys
 from uuid import uuid4 as uuid
 from asyncio import Lock
 import json
+import datetime
 
 
 MAX_NUM_PLAYER = 6
@@ -35,9 +37,16 @@ with open(CONFIG_FILE) as fd:
     _config = json.load(fd)
 
 BASE_DIR = Path(_config['base_dir'])
+OUTPUT_LOG = Path(_config['output_log']).absolute() if 'output_log' in _config else None
 
 PLAYER_CODE_DIR = BASE_DIR / 'Programs/Source/'
 HOSTS_DIR = BASE_DIR
+
+PROTOCOL_DIR = BASE_DIR
+
+os.chdir(BASE_DIR)
+
+DT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 class PlayerJob(BaseModel):
@@ -99,6 +108,23 @@ def new_player(player_job: PlayerJob, background_tasks: BackgroundTasks):
     return player_job.player_id
 
 
+async def wait_and_handle_stderr(proc, player_id):
+    full_log = b""
+    while proc.returncode is None:
+        buf = await proc.stderr.read(20)
+        if not buf:
+            break
+        full_log += buf
+        sys.stderr.write(buf.decode())
+    log = full_log.decode()
+    if player_id == 0 and OUTPUT_LOG:
+        s_now = datetime.date.today().strftime(DT_FORMAT)
+        line_head = f"\n###### NEW LOG @ {s_now} ######\n"
+        with open(OUTPUT_LOG, 'a') as fd:
+            fd.write(line_head)
+            fd.write(log)
+
+
 async def save_compile_run_player(player_job: PlayerJob):
     code_file = save_player_code(player_job.player_code)
     code_name = code_file.stem
@@ -107,7 +133,7 @@ async def save_compile_run_player(player_job: PlayerJob):
     await proc_compile.communicate()
     compiled_code_name = '-'.join([code_name] + args)
     proc_player = await run_player(compiled_code_name, hosts_file, player_job)
-    await proc_player.communicate()
+    await wait_and_handle_stderr(proc_player, player_job.player_id)  
     await release_port(player_job.player_place_id)
     clean_workspace(code_file, hosts_file)
 
@@ -138,11 +164,11 @@ def save_hosts_file(player_servers: List[str]) -> Path:
 
 
 async def run_player(code_name: str, hosts_file: Path, player_job: PlayerJob):
-    cmd = [f"./{player_job.protocol}-party.x", '-N', len(player_job.player_servers), '-ip', str(hosts_file), player_job.player_id, code_name]
+    protocol_main = PROTOCOL_DIR / f"{player_job.protocol}-party.x"
+    cmd = [protocol_main, '-N', len(player_job.player_servers), '-ip', str(hosts_file), player_job.player_id, code_name]
     cmd = [str(e) for e in cmd]
-    command_text = f"cd {BASE_DIR}; " + ' '.join(cmd)
-    print('@@', command_text)
-    proc = await asyncio.subprocess.create_subprocess_shell(command_text)
+    print('@@', cmd)
+    proc = await asyncio.subprocess.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     return proc
 
 

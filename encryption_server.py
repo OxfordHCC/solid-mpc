@@ -16,7 +16,7 @@ Each server may receive and spawn multiple jobs. So randomization of job names (
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 from dataclasses import dataclass
 import tempfile
@@ -43,6 +43,8 @@ class ClientJob(BaseModel):
     client_id: int
     client_code: str
     player_servers: List[str]
+    data_size: int
+    extra_args: Optional[List[str]] = []
 
 
 @dataclass
@@ -130,7 +132,9 @@ async def fetch_data(data_uri: str) -> Path:
 
 async def run_client(code_file: Path, data_file: Path, job: ClientJob, client_uuid: str):
     global client_job_pool
-    cmd = [str(e) for e in ['python', code_file, job.client_id, data_file, ','.join(job.player_servers)]]
+    cmd = ['python', code_file, job.client_id, data_file, ','.join(job.player_servers), job.data_size]
+    cmd.extend(job.extra_args)
+    cmd = [str(e) for e in cmd]
     command_text = f"cd {BASE_DIR};" + ' '.join(cmd)
     proc = await asyncio.create_subprocess_shell(command_text, stdout=asyncio.subprocess.PIPE)
     context = JobContext(client_uuid, proc, job.computation_id, job.client_id, code_file, data_file)

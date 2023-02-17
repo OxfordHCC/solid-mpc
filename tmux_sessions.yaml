@@ -15,6 +15,6 @@ windows:
       - PORT_BASE=5020 uvicorn computation_server:app --port 8012
   - window_name: solid_app
     shell_command_before:
-      - cd mpc-app
+      - cd ../solid-mpc-app
     panes:
-      - npm run build && npm run start 
+      - npm run dev

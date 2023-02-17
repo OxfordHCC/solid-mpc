@@ -48,6 +48,8 @@ class PlayerJob(BaseModel):
     protocol: Optional[str] = 'shamir'
     player_servers: List[str]
     player_code: str
+    data_size: int
+    extra_args: Optional[List[str]] = []
 
 
 app = FastAPI()
@@ -101,9 +103,9 @@ async def save_compile_run_player(player_job: PlayerJob):
     code_file = save_player_code(player_job.player_code)
     code_name = code_file.stem
     hosts_file = save_hosts_file(player_job.player_servers)
-    proc_compile = await compile_player_code(code_name, player_job.num_client)
+    proc_compile, args = await compile_player_code(code_name, player_job)
     await proc_compile.communicate()
-    compiled_code_name = f"{code_name}-{player_job.num_client}"
+    compiled_code_name = '-'.join([code_name] + args)
     proc_player = await run_player(compiled_code_name, hosts_file, player_job)
     await proc_player.communicate()
     await release_port(player_job.player_place_id)
@@ -117,12 +119,15 @@ def save_player_code(player_code: str) -> Path:
     return Path(code_file)
 
 
-async def compile_player_code(code_name: str, num_client: int):
-    cmd = ['./compile.py', code_name, num_client]
+async def compile_player_code(code_name: str, player_job: PlayerJob):
+    num_client = player_job.num_client
+    data_size = player_job.data_size
+    cmd = ['./compile.py', code_name, num_client, data_size]
+    cmd.extend(player_job.extra_args)
     cmd = [str(e) for e in cmd]
     command_text = f"cd {BASE_DIR}; " + ' '.join(cmd)
     proc = await asyncio.subprocess.create_subprocess_shell(command_text)
-    return proc
+    return proc, cmd[2:]
 
 
 def save_hosts_file(player_servers: List[str]) -> Path:

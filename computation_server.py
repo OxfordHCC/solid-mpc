@@ -108,7 +108,7 @@ def new_player(player_job: PlayerJob, background_tasks: BackgroundTasks):
     return player_job.player_id
 
 
-async def wait_and_handle_stderr(proc, player_id):
+async def wait_and_handle_stderr(proc, player_job: PlayerJob, prog_and_args):
     full_log = b""
     while proc.returncode is None:
         buf = await proc.stderr.read(20)
@@ -117,12 +117,20 @@ async def wait_and_handle_stderr(proc, player_id):
         full_log += buf
         sys.stderr.write(buf.decode())
     log = full_log.decode()
-    if player_id == 0 and OUTPUT_LOG:
-        s_now = datetime.date.today().strftime(DT_FORMAT)
-        line_head = f"\n###### NEW LOG @ {s_now} ######\n"
+    if player_job.player_id == 0 and OUTPUT_LOG:
+        s_now = datetime.datetime.now().strftime(DT_FORMAT)
+        run_info = {
+            'prog_and_args': prog_and_args,
+            'num_player': len(player_job.player_servers),
+            'data_size': player_job.data_size,
+            'num_client': player_job.num_client,
+        }
+        line_head = f"###### {s_now} {json.dumps(run_info)} ######\n"
+        line_end = "######\n";
         with open(OUTPUT_LOG, 'a') as fd:
             fd.write(line_head)
             fd.write(log)
+            fd.write(line_end)
 
 
 async def save_compile_run_player(player_job: PlayerJob):
@@ -131,9 +139,10 @@ async def save_compile_run_player(player_job: PlayerJob):
     hosts_file = save_hosts_file(player_job.player_servers)
     proc_compile, args = await compile_player_code(code_name, player_job)
     await proc_compile.communicate()
-    compiled_code_name = '-'.join([code_name] + args)
+    prog_and_args = [code_name] + args
+    compiled_code_name = '-'.join(prog_and_args)
     proc_player = await run_player(compiled_code_name, hosts_file, player_job)
-    await wait_and_handle_stderr(proc_player, player_job.player_id)  
+    await wait_and_handle_stderr(proc_player, player_job, prog_and_args)
     await release_port(player_job.player_place_id)
     clean_workspace(code_file, hosts_file)
 
@@ -168,7 +177,7 @@ async def run_player(code_name: str, hosts_file: Path, player_job: PlayerJob):
     cmd = [protocol_main, '-N', len(player_job.player_servers), '-ip', str(hosts_file), player_job.player_id, code_name]
     cmd = [str(e) for e in cmd]
     print('@@', cmd)
-    proc = await asyncio.subprocess.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    proc = await asyncio.subprocess.create_subprocess_exec(*cmd, stderr=asyncio.subprocess.PIPE)
     return proc
 
 

@@ -13,8 +13,10 @@ Each server may receive and spawn multiple jobs. So randomization of job names (
 '''
 
 
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
+from fastapi import status
 from pydantic import BaseModel
 from typing import List, Optional
 from pathlib import Path
@@ -23,8 +25,9 @@ import tempfile
 import asyncio
 import os
 from collections import defaultdict
-from uuid import uuid4 as uuid
+from uuid import uuid4 as uuid, UUID
 import json
+import time
 
 
 CONFIG_FILE = 'config/encryption_agent.json'
@@ -57,7 +60,10 @@ class JobContext:
     data_file: Path
 
 
-client_job_pool = {}
+MAX_CONCURRENT_CLIENT_HANDLES = 100
+client_handle_pool = asyncio.Queue(MAX_CONCURRENT_CLIENT_HANDLES)
+
+client_job_collection = {}
 
 
 app = FastAPI()
@@ -86,23 +92,26 @@ def read_root():
 
 @app.put('/client')
 async def new_client(job: ClientJob, background_tasks: BackgroundTasks):
+    global client_job_collection
     client_uuid = str(uuid())
-    code_file = save_client_code(job.client_code)
-    data_file = await fetch_data(job.data_uri)
-    context = await run_client(code_file, data_file, job, client_uuid)
-    background_tasks.add_task(clean_workspace, context)
+    client_job_collection[client_uuid] = None
+    background_tasks.add_task(handle_new_client, client_uuid, job)
     return client_uuid
 
 
 @app.get('/client/{client_uuid}')
-async def client_status(client_uuid: str, blocking: bool):
-    global client_job_pool
+async def client_status(client_uuid: str):
+    global client_job_collection
     try:
-        context = client_job_pool[client_uuid]
-        if blocking:
-            stdout, stderr = await context.proc.communicate()
-        else:
-            stdout, stderr = b'', b''
+        context = client_job_collection[client_uuid]
+        if context is None:
+            raise KeyError()
+        if context.proc.returncode is None:
+            return Response(
+                status_code=520,
+                content="Not yet finished"
+            )
+        stdout, stderr = await context.proc.communicate()
         return_code = context.proc.returncode
         output = stdout.decode()
         return {
@@ -110,8 +119,20 @@ async def client_status(client_uuid: str, blocking: bool):
                 'output': output
                 }
     except KeyError:
-        return json.dumps(client_job_pool)
+        return JSONResponse(
+            status_code=520,
+            content=json.dumps(list(client_job_collection.keys()))
+        )
         # return 404
+
+
+async def handle_new_client(client_uuid: UUID, job: ClientJob):
+    await client_handle_pool.put(True)
+    code_file = save_client_code(job.client_code)
+    data_file = await fetch_data(job.data_uri)
+    context = await run_client(code_file, data_file, job, client_uuid)
+    await client_handle_pool.get()
+    await clean_workspace(context)
 
 
 def save_client_code(client_code: str) -> Path:
@@ -131,21 +152,21 @@ async def fetch_data(data_uri: str) -> Path:
 
 
 async def run_client(code_file: Path, data_file: Path, job: ClientJob, client_uuid: str):
-    global client_job_pool
+    global client_job_collection
     cmd = ['python', code_file, job.client_id, data_file, ','.join(job.player_servers), job.data_size]
     cmd.extend(job.extra_args)
     cmd = [str(e) for e in cmd]
     command_text = f"cd {BASE_DIR};" + ' '.join(cmd)
     proc = await asyncio.create_subprocess_shell(command_text, stdout=asyncio.subprocess.PIPE)
     context = JobContext(client_uuid, proc, job.computation_id, job.client_id, code_file, data_file)
-    client_job_pool[client_uuid] = context
+    client_job_collection[client_uuid] = context
     return context
 
 
 async def clean_workspace(job_context: JobContext):
-    global client_job_pool
+    global client_job_collection
     await job_context.proc.wait()
     os.remove(job_context.code_file)
     os.remove(job_context.data_file)
     await asyncio.sleep(60)  # For demonstration, wait 60 seconds before removing the jobs
-    del client_job_pool[job_context.client_uuid]
+    del client_job_collection[job_context.client_uuid]

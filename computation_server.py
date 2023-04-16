@@ -24,6 +24,7 @@ from uuid import uuid4 as uuid
 from asyncio import Lock
 import json
 import datetime
+from aiostream.stream import merge
 
 
 MAX_NUM_PLAYER = 6
@@ -108,14 +109,14 @@ def new_player(player_job: PlayerJob, background_tasks: BackgroundTasks):
     return player_job.player_id
 
 
-async def wait_and_handle_stderr(proc, player_job: PlayerJob, prog_and_args):
+async def wait_and_handle_output(proc, player_job: PlayerJob, prog_and_args):
     full_log = b""
-    while proc.returncode is None:
-        buf = await proc.stderr.read(20)
-        if not buf:
-            break
-        full_log += buf
-        sys.stderr.write(buf.decode())
+
+    # See https://stackoverflow.com/questions/50901182/watch-stdout-and-stderr-of-a-subprocess-simultaneously
+    async for f in merge(proc.stdout, proc.stderr):
+        sys.stderr.write(f"{datetime.datetime.now()} {f.decode()}")
+        full_log += f
+
     log = full_log.decode()
     if player_job.player_id == 0 and OUTPUT_LOG:
         s_now = datetime.datetime.now().strftime(DT_FORMAT)
@@ -142,7 +143,7 @@ async def save_compile_run_player(player_job: PlayerJob):
     prog_and_args = [code_name] + args
     compiled_code_name = '-'.join(prog_and_args)
     proc_player = await run_player(compiled_code_name, hosts_file, player_job)
-    await wait_and_handle_stderr(proc_player, player_job, prog_and_args)
+    await wait_and_handle_output(proc_player, player_job, prog_and_args)
     await release_port(player_job.player_place_id)
     clean_workspace(code_file, hosts_file)
 
@@ -177,7 +178,7 @@ async def run_player(code_name: str, hosts_file: Path, player_job: PlayerJob):
     cmd = [protocol_main, '-N', len(player_job.player_servers), '-ip', str(hosts_file), player_job.player_id, code_name]
     cmd = [str(e) for e in cmd]
     print('@@', cmd)
-    proc = await asyncio.subprocess.create_subprocess_exec(*cmd, stderr=asyncio.subprocess.PIPE)
+    proc = await asyncio.subprocess.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     return proc
 
 

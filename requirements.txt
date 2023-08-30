@@ -3,3 +3,4 @@ ipython
 gmpy2
 fastapi
 uvicorn
+aiostream
